@@ -683,20 +683,8 @@ body {
 const SB_URL = 'https://ixcqhparwhmpitwsokch.supabase.co';
 const SB_KEY = 'sb_publishable_LQGawcyc4W2lEHRdXo-wFw_sA_LDpD6';
 
-function _sbHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'apikey': SB_KEY,
-    'Authorization': 'Bearer ' + SB_KEY,
-    'Prefer': 'return=minimal'
-  };
-}
 
 // Marcar boton guardar como pendiente
-function _markPending() {
-  const btn = document.getElementById('btn-guardar');
-  if (btn) { btn.style.background = '#e94560'; btn.textContent = '💾 Guardar *'; }
-}
 
 // GUARDAR → sube a Supabase
 async function sbGuardar() {
@@ -793,6 +781,67 @@ async function sbCargarInicio() {
   }
 }
 </script>
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxbYi2zZgmgM0zqXQglf2eLrOILcW_xO5-uGa1e2StTqqW27U8jwsuCzBh_XakGHNIIGw/exec';
+
+async function gasGuardar() {
+  const btn = document.getElementById('btn-guardar');
+  btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST', body: JSON.stringify({ personal, turnos })
+    });
+    const d = await res.json();
+    if (!d.ok) throw new Error('Error servidor');
+    localStorage.setItem('ph_personal', JSON.stringify(personal));
+    localStorage.setItem('ph_turnos', JSON.stringify(turnos));
+    btn.style.background = '#2ecc71'; btn.textContent = '💾 Guardar';
+    showToast('✅ Guardado en Google Sheets');
+  } catch(e) {
+    showToast('❌ Error: ' + e.message);
+    btn.style.background = '#e94560'; btn.textContent = '💾 Guardar *';
+  }
+  btn.disabled = false;
+}
+
+async function gasActualizar() {
+  const btn = document.getElementById('btn-actualizar');
+  btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const res = await fetch(GAS_URL + '?t=' + Date.now());
+    const d = await res.json();
+    if (!d.ok) throw new Error('Error servidor');
+    const p = typeof d.data.personal === 'string' ? JSON.parse(d.data.personal) : (d.data.personal || []);
+    const t = typeof d.data.turnos === 'string' ? JSON.parse(d.data.turnos) : (d.data.turnos || {});
+    if (p.length > 0) { personal = p; localStorage.setItem('ph_personal', JSON.stringify(p)); }
+    if (Object.keys(t).length > 0) { turnos = t; localStorage.setItem('ph_turnos', JSON.stringify(t)); }
+    renderPersonal(); renderSchedule();
+    showToast('✅ Datos actualizados');
+  } catch(e) {
+    showToast('❌ Error: ' + e.message);
+  }
+  btn.textContent = '🔄 Actualizar'; btn.disabled = false;
+}
+
+async function gasCargarInicio() {
+  const el = document.getElementById('sync-status');
+  try {
+    const res = await fetch(GAS_URL + '?t=' + Date.now());
+    const d = await res.json();
+    if (!d.ok) throw new Error();
+    const p = typeof d.data.personal === 'string' ? JSON.parse(d.data.personal) : (d.data.personal || []);
+    const t = typeof d.data.turnos === 'string' ? JSON.parse(d.data.turnos) : (d.data.turnos || {});
+    personal = p.length > 0 ? p : personal;
+    turnos = Object.keys(t).length > 0 ? t : turnos;
+    localStorage.setItem('ph_personal', JSON.stringify(personal));
+    localStorage.setItem('ph_turnos', JSON.stringify(turnos));
+    renderPersonal(); renderSchedule();
+    if (el) el.textContent = '🟢';
+  } catch(e) {
+    if (el) el.textContent = '🔴';
+  }
+}
+</script>
 </head>
 <body>
 
@@ -807,8 +856,8 @@ async function sbCargarInicio() {
   </div>
   <div class="nav-actions" style="display:flex;gap:8px;align-items:center;">
     <span id="sync-status" style="font-size:11px;color:#888;">⏳</span>
-    <button id="btn-actualizar" onclick="sbActualizar()" style="background:#3498db;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">🔄 Actualizar</button>
-    <button id="btn-guardar" onclick="sbGuardar()" style="background:#2ecc71;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">💾 Guardar</button>
+    <button id="btn-actualizar" onclick="gasActualizar()" style="background:#3498db;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">🔄 Actualizar</button>
+    <button id="btn-guardar" onclick="gasGuardar()" style="background:#2ecc71;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">💾 Guardar</button>
   </div>
 </nav>
 
@@ -1013,22 +1062,20 @@ async function sbCargarInicio() {
 const STORE_PERSONAL = 'ph_personal';
 const STORE_TURNOS   = 'ph_turnos';
 
-function loadPersonal() {
-  const r = localStorage.getItem('ph_personal'); return r ? JSON.parse(r) : [];
-}
+function loadPersonal() { const r = localStorage.getItem('ph_personal'); return r ? JSON.parse(r) : []; }
 
 function savePersonal(data) {
-  localStorage.setItem('ph_personal', JSON.stringify(data));
-  _markPending();
+  personal = data;
+  const btn = document.getElementById('btn-guardar');
+  if (btn) { btn.style.background = '#e94560'; btn.textContent = '💾 Guardar *'; }
 }
 
-function loadTurnos() {
-  const r = localStorage.getItem('ph_turnos'); return r ? JSON.parse(r) : {};
-}
+function loadTurnos() { const r = localStorage.getItem('ph_turnos'); return r ? JSON.parse(r) : {}; }
 
 function saveTurnos(data) {
-  localStorage.setItem('ph_turnos', JSON.stringify(data));
-  _markPending();
+  turnos = data;
+  const btn = document.getElementById('btn-guardar');
+  if (btn) { btn.style.background = '#e94560'; btn.textContent = '💾 Guardar *'; }
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────
